@@ -104,6 +104,9 @@ jobs:
           if [ ! -f pages-state/repo/config ]; then
             ostree init --repo=pages-state/repo --mode=archive-z2
           fi
+          # git does not track empty dirs, so refs/remotes/ vanishes on
+          # gh-pages round-trips; recreate it before build-update-repo.
+          mkdir -p pages-state/repo/refs/remotes
 
       - name: Download bundle
         run: curl -fL --retry 3 "${{ steps.payload.outputs.bundle_url }}" -o /tmp/bundle.flatpak
