@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pascal's Audio Flatpaks</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 3em auto; padding: 0 1em; line-height: 1.5; color: #222; }
+    h1 { margin-top: 0; }
+    code, pre { font-family: ui-monospace, monospace; }
+    pre { background: #f4f4f4; padding: 1em; border-radius: 6px; overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 0.4em 0.8em; border-bottom: 1px solid #ddd; }
+    .small { color: #666; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h1>Pascal's Audio Flatpaks</h1>
+  <p>Personal test Flatpak repo for a low-latency Reaper + yabridge stack on Linux/PipeWire.</p>
+
+  <h2>Add the remote</h2>
+  <pre><code>flatpak remote-add --user --if-not-exists \
+  audio-flatpak https://pascalfilippi.github.io/audio-flatpak-repo/audio-flatpak.flatpakrepo</code></pre>
+
+  <h2>Install</h2>
+  <pre><code>flatpak install --user audio-flatpak fm.reaper.Reaper
+flatpak install --user audio-flatpak io.github.audioflatpak.YabridgeManager
+flatpak install --user audio-flatpak org.freedesktop.LinuxAudio.Plugins.yabridge//25.08</code></pre>
+
+  <h2>Apps</h2>
+  <table>
+    <tr><th>ID</th><th>Source</th></tr>
+    <tr><td><code>fm.reaper.Reaper</code></td><td><a href="https://github.com/pascalfilippi/reaper-flatpak">reaper-flatpak</a></td></tr>
+    <tr><td><code>io.github.audioflatpak.YabridgeManager</code></td><td><a href="https://github.com/pascalfilippi/yabridge-manager">yabridge-manager</a></td></tr>
+    <tr><td><code>org.freedesktop.LinuxAudio.Plugins.yabridge</code></td><td><a href="https://github.com/pascalfilippi/yabridge-flatpak">yabridge-flatpak</a></td></tr>
+  </table>
+
+  <p class="small">Built and published by GitHub Actions from each source repo. The published <code>repo/</code> directory is an ostree archive-z2 repo served as static files.</p>
+</body>
+</html>
