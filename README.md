@@ -50,10 +50,6 @@ will be merged into the same ostree repo. To add a new app:
 2. Add `DISPATCH_PAT` secret (same PAT as the existing source repos).
 3. Push. The first build will appear in this repo on its next publish.
 
-## First-time setup
-
-See [SETUP.md](SETUP-flatpak-repo.md).
-
 ## Manual republish
 
 If you need to re-import a specific bundle (e.g. after wiping the gh-pages
