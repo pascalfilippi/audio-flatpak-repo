@@ -1,0 +1,143 @@
+name: publish
+
+on:
+  repository_dispatch:
+    types: [bundle-published]
+  workflow_dispatch:
+    inputs:
+      bundle_url:
+        description: 'Direct URL to a .flatpak bundle (manual republish)'
+        required: true
+      source_repo:
+        description: 'Originating repo (for the commit message)'
+        required: false
+        default: 'manual'
+      source_sha:
+        description: 'Originating commit SHA (for the commit message)'
+        required: false
+        default: 'manual'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# build-update-repo rewrites the summary file and is not concurrent-safe.
+# Serialize all publishes; never cancel an in-flight one.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Install flatpak + ostree
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak ostree gnupg
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_ID:      ${{ secrets.GPG_KEY_ID }}
+        run: |
+          GNUPGHOME="$(mktemp -d)"
+          chmod 700 "$GNUPGHOME"
+          export GNUPGHOME
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --list-secret-keys "$GPG_KEY_ID" >/dev/null
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          echo "GPG_KEY_ID=$GPG_KEY_ID" >> "$GITHUB_ENV"
+
+      - name: Resolve dispatch payload
+        id: payload
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "bundle_url=${{ github.event.inputs.bundle_url }}"  >> "$GITHUB_OUTPUT"
+            echo "source_repo=${{ github.event.inputs.source_repo }}" >> "$GITHUB_OUTPUT"
+            echo "source_sha=${{ github.event.inputs.source_sha }}"   >> "$GITHUB_OUTPUT"
+          else
+            echo "bundle_url=${{ github.event.client_payload.bundle_url }}"  >> "$GITHUB_OUTPUT"
+            echo "source_repo=${{ github.event.client_payload.source_repo }}" >> "$GITHUB_OUTPUT"
+            echo "source_sha=${{ github.event.client_payload.source_sha }}"   >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout main (landing files)
+        uses: actions/checkout@v4
+        with:
+          path: main-state
+
+      - name: Checkout gh-pages (existing ostree state)
+        id: checkout-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: pages-state
+        continue-on-error: true
+
+      - name: Initialize gh-pages tree if missing
+        run: |
+          if [ ! -d pages-state/.git ]; then
+            # First run: branch doesn't exist yet. Bootstrap an empty tree
+            # that we'll later push to create the gh-pages branch.
+            mkdir -p pages-state
+            cd pages-state
+            git init -b gh-pages
+            git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          fi
+          mkdir -p pages-state/repo
+          if [ ! -f pages-state/repo/config ]; then
+            ostree init --repo=pages-state/repo --mode=archive-z2
+          fi
+
+      - name: Download bundle
+        run: curl -fL --retry 3 "${{ steps.payload.outputs.bundle_url }}" -o /tmp/bundle.flatpak
+
+      - name: Import bundle into ostree repo
+        run: |
+          flatpak build-import-bundle \
+            --gpg-sign="$GPG_KEY_ID" --gpg-homedir="$GNUPGHOME" \
+            pages-state/repo /tmp/bundle.flatpak
+
+      - name: Regenerate repo summary
+        run: |
+          flatpak build-update-repo --generate-static-deltas \
+            --gpg-sign="$GPG_KEY_ID" --gpg-homedir="$GNUPGHOME" \
+            pages-state/repo
+
+      - name: Copy landing files into publish tree
+        run: |
+          cp main-state/index.html                  pages-state/
+          cp main-state/audio-flatpak.flatpakrepo   pages-state/
+
+      - name: Commit and push gh-pages
+        working-directory: pages-state
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to commit — bundle already imported."
+          else
+            git commit -m "publish: ${{ steps.payload.outputs.source_repo }}@${{ steps.payload.outputs.source_sha }}"
+          fi
+          # On bootstrap (no upstream yet), force the first push; on every
+          # subsequent run it's a fast-forward push.
+          if git ls-remote --exit-code origin gh-pages >/dev/null 2>&1; then
+            git push origin gh-pages
+          else
+            git push -u origin gh-pages
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages-state
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

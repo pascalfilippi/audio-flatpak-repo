@@ -1,0 +1,6 @@
+[Flatpak Repo]
+Title=Pascal's Audio Flatpaks
+Url=https://pascalfilippi.github.io/audio-flatpak-repo/repo/
+Homepage=https://github.com/pascalfilippi/audio-flatpak-repo
+Description=Personal test repo: Reaper + yabridge + audio tooling.
+GPGKey=mDMEaiqMtxYJKwYBBAHaRw8BAQdAelwosJ07Y5N8QhCLidTuAXeiu0q9cQbHPRCFD1Gh7W+0N2F1ZGlvLWZsYXRwYWstcmVwbyBzaWduZXIgPG5vcmVwbHlAZmlsaXBwaS1zb2Z0d2FyZS5kZT6ImQQTFgoAQRYhBCRrX+UMGlvt9enVuq4TRWOt+AhVBQJqKoy3AhsDBQkJZgGABQsJCAcCAiICBhUKCQgLAgQWAgMBAh4HAheAAAoJEK4TRWOt+AhVs6UA/jx6fv2e9PrpTee+xsdndfMI4ODXSBKw21Lin2xoymbbAQCtNDeSET6IwTnMOoR/KxahcPgX/km4JPILyLpkqlcNAA==
