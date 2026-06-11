@@ -71,24 +71,35 @@ jobs:
         with:
           path: main-state
 
-      - name: Checkout gh-pages (existing ostree state)
-        id: checkout-pages
+      - name: Detect gh-pages branch on remote
+        id: detect
+        run: |
+          if git ls-remote --exit-code \
+              "https://github.com/${{ github.repository }}.git" \
+              refs/heads/gh-pages >/dev/null 2>&1; then
+            echo "exists=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout existing gh-pages tree
+        if: steps.detect.outputs.exists == 'true'
         uses: actions/checkout@v4
         with:
           ref: gh-pages
           path: pages-state
-        continue-on-error: true
 
-      - name: Initialize gh-pages tree if missing
+      - name: Bootstrap empty gh-pages tree
+        if: steps.detect.outputs.exists == 'false'
         run: |
-          if [ ! -d pages-state/.git ]; then
-            # First run: branch doesn't exist yet. Bootstrap an empty tree
-            # that we'll later push to create the gh-pages branch.
-            mkdir -p pages-state
-            cd pages-state
-            git init -b gh-pages
-            git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-          fi
+          mkdir -p pages-state
+          cd pages-state
+          git init -b gh-pages
+          git remote add origin \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+
+      - name: Initialize ostree repo if missing
+        run: |
           mkdir -p pages-state/repo
           if [ ! -f pages-state/repo/config ]; then
             ostree init --repo=pages-state/repo --mode=archive-z2
