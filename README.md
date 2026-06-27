@@ -9,5 +9,5 @@ repos and dispatched here for publication.
 flatpak remote-add --user --if-not-exists \
   audio-flatpak https://pascalfilippi.github.io/audio-flatpak-repo/audio-flatpak.flatpakrepo
 
-flatpak install --user audio-flatpak fm.reaper.Reaper
+flatpak install --user audio-flatpak <app id>
 ```

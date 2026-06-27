@@ -1,0 +1,115 @@
+name: depublish
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_id:
+        description: 'Flatpak application ID (e.g. com.example.MyApp)'
+        required: true
+      arch:
+        description: 'Architecture'
+        required: false
+        default: 'x86_64'
+      flatpak_branch:
+        description: 'Flatpak branch (e.g. stable, beta)'
+        required: false
+        default: 'stable'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Serialize with publish runs — both rewrite the ostree summary.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  depublish:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Install flatpak + ostree
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak ostree gnupg
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_ID:      ${{ secrets.GPG_KEY_ID }}
+        run: |
+          GNUPGHOME="$(mktemp -d)"
+          chmod 700 "$GNUPGHOME"
+          export GNUPGHOME
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --list-secret-keys "$GPG_KEY_ID" >/dev/null
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          echo "GPG_KEY_ID=$GPG_KEY_ID" >> "$GITHUB_ENV"
+
+      - name: Checkout main (landing files)
+        uses: actions/checkout@v4
+        with:
+          path: main-state
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: pages-state
+
+      - name: Restore refs/remotes dir
+        run: mkdir -p pages-state/repo/refs/remotes
+
+      - name: Verify ref exists
+        id: check
+        run: |
+          REF="app/${{ github.event.inputs.app_id }}/${{ github.event.inputs.arch }}/${{ github.event.inputs.flatpak_branch }}"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "Refs currently in repo:"
+          ostree refs --repo=pages-state/repo
+          if ostree refs --repo=pages-state/repo | grep -qxF "$REF"; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Ref '$REF' not found in repo — nothing to depublish."
+            exit 1
+          fi
+
+      - name: Delete ostree ref
+        run: |
+          ostree refs --repo=pages-state/repo --delete "${{ steps.check.outputs.ref }}"
+
+      - name: Regenerate repo summary
+        run: |
+          flatpak build-update-repo \
+            --generate-static-deltas \
+            --prune --prune-depth=0 \
+            --gpg-sign="$GPG_KEY_ID" --gpg-homedir="$GNUPGHOME" \
+            pages-state/repo
+
+      - name: Copy landing files into publish tree
+        run: |
+          cp main-state/index.html                  pages-state/
+          cp main-state/audio-flatpak.flatpakrepo   pages-state/
+
+      - name: Commit and push gh-pages
+        working-directory: pages-state
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "depublish: ${{ github.event.inputs.app_id }}/${{ github.event.inputs.arch }}/${{ github.event.inputs.flatpak_branch }}"
+          git push origin gh-pages
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages-state
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
